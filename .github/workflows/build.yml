@@ -1,5 +1,4 @@
-name: Build APK
-
+name: CI
 on:
   push:
     branches: [ main ]
@@ -9,40 +8,35 @@ jobs:
     runs-on: ubuntu-20.04
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-      # Set up Python
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11' # Especifica la versión de Python aquí
-
-      # Install dependencies
-      - name: Install dependencies
+      # used to cache dependencies with a timeout
+      - name: Get Date
+        id: get-date
         run: |
-          sudo apt update
-          sudo apt install -y openjdk-8-jdk
-          python -m pip install --upgrade pip
-          pip install buildozer
-          pip install cython==0.29.21  # Versión compatible con python-for-android
-          pip install python-for-android  # Instala python-for-android
+          echo "::set-output name=date::$(/bin/date -u "+%Y%m%d")"
+        shell: bash
 
-      # Cache Buildozer global directory
       - name: Cache Buildozer global directory
         uses: actions/cache@v2
         with:
-          path: ~/.buildozer
-          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          path: .buildozer_global
+          key: buildozer-global-${{ hashFiles('buildozer.spec') }} # Replace with your path
 
-      - name: Build APK
-        run: |
-          buildozer android clean
-          buildozer android debug
+      - uses: actions/cache@v2
+        with:
+          path: .buildozer
+          key: ${{ runner.os }}-${{ steps.get-date.outputs.date }}-${{ hashFiles('buildozer.spec') }}
 
-      # Upload artifacts
-      - name: Upload APK
+      - name: Build with Buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          command: buildozer android debug
+          buildozer_version: stable
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: apk
-          path: bin/*.apk
+          name: package
+          path: ${{ steps.buildozer.outputs.filename }}
